@@ -188,12 +188,32 @@ module OneLogin
       end
 
       def get_fingerprint
-        if settings.idp_cert
-          cert = OpenSSL::X509::Certificate.new(settings.idp_cert)
-          Digest::SHA1.hexdigest(cert.to_der).upcase.scan(/../).join(":")
-        else
-          settings.idp_cert_fingerprint
+        settings.idp_cert_fingerprint || begin
+          certificate = formatted_certificate(settings.idp_cert)
+          x509 = OpenSSL::X509::Certificate.new(certificate)
+          Digest::SHA1.hexdigest(x509.to_der).upcase.scan(/../).join(":")
         end
+      end
+
+      def valid_certificate?(certificate)
+        (certificate.match(/\-{5}\s?BEGIN CERTIFICATE\s?\-{5}/) &&
+          certificate.match(/\-{5}\s?END CERTIFICATE\s?\-{5}/) &&
+          certificate.lines.count >= 12) ||
+        certificate.gsub(/\n/, "")
+          .match(/[\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11]+/)
+      end
+
+      def formatted_certificate(certificate)
+        return certificate if valid_certificate?(certificate)
+
+        # remove header, footer, spaces and line breaks, align width to 64 chars
+        body = certificate.chomp
+          .gsub(/\-{5}\s?(BEGIN|END) CERTIFICATE\s?\-{5}/, "")
+          .gsub(/[\n\s\t]*/, "")
+          .scan(/.{1,64}/)
+          .join("\n")
+
+        "----- BEGIN CERTIFICATE -----\n#{body}\n----- END CERTIFICATE -----"
       end
 
       def validate_conditions(soft = true)
