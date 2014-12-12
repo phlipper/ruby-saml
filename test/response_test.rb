@@ -367,6 +367,5 @@ class RubySamlTest < Test::Unit::TestCase
         response.success?
       end
     end
-
   end
 end
