@@ -151,19 +151,17 @@ module OneLogin
       end
 
       def validate_structure(soft = true)
-        Dir.chdir(File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'schemas'))) do
-          @schema = Nokogiri::XML::Schema(IO.read('saml-schema-protocol-2.0.xsd'))
-          @xml = Nokogiri::XML(self.document.to_s)
-        end
-        if soft
-          @schema.validate(@xml).map{
-            @errors << "Schema validation failed";
+        @schema = SamlMessage.protocol_schema
+        @xml = Nokogiri::XML(self.document.to_s)
+
+        @schema.validate(@xml).map do |error|
+          if soft
+            @errors << "Schema validation failed"
             return false
-          }
-        else
-          @schema.validate(@xml).map{ |error| @errors << "#{error.message}\n\n#{@xml.to_s}";
+          else
+            @errors << "#{error.message}\n\n#{@xml.to_s}"
             validation_error("#{error.message}\n\n#{@xml.to_s}")
-          }
+          end
         end
       end
 
