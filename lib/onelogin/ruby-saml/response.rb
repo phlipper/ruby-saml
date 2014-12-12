@@ -190,10 +190,19 @@ module OneLogin
 
       def get_fingerprint
         if settings.idp_cert
-          cert = OpenSSL::X509::Certificate.new(settings.idp_cert)
+          cert = OpenSSL::X509::Certificate.new(clean_cert(settings.idp_cert))
           Digest::SHA1.hexdigest(cert.to_der).upcase.scan(/../).join(":")
         else
           settings.idp_cert_fingerprint
+        end
+      end
+
+      def clean_cert(cert)
+        if cert && cert.lines.count == 1
+          raw_cert = cert.gsub("-----BEGIN CERTIFICATE-----","").gsub("-----END CERTIFICATE-----","").gsub("\n","").gsub(/\s/, "").scan(/.{1,64}/).join("\n")
+          "-----BEGIN CERTIFICATE-----\n#{raw_cert}\n-----END CERTIFICATE-----"
+        else
+          cert
         end
       end
 
