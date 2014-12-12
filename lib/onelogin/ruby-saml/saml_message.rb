@@ -13,14 +13,19 @@ module OneLogin
 
       ASSERTION = "urn:oasis:names:tc:SAML:2.0:assertion"
       PROTOCOL  = "urn:oasis:names:tc:SAML:2.0:protocol"
-      SAML_SCHEMA_PROTOCOL_20 = Mutex.new.synchronize do
-        Dir.chdir(File.expand_path("../../../schemas", __FILE__)) do
-          ::Nokogiri::XML::Schema(File.read("saml-schema-protocol-2.0.xsd"))
+
+      def self.SAML_SCHEMA_PROTOCOL_20
+        @schema_mutex ||= Mutex.new
+        @saml_schema ||= @schema_mutex.synchronize do
+          Dir.chdir(File.expand_path("../../../schemas", __FILE__)) do
+            ::Nokogiri::XML::Schema(File.read("saml-schema-protocol-2.0.xsd"))
+          end
         end
+        @saml_schema
       end
 
       def valid_saml?(document, soft = true)
-        @schema = SAML_SCHEMA_PROTOCOL_20
+        @schema = SamlMessage.SAML_SCHEMA_PROTOCOL_20
         @xml = Nokogiri::XML(document.to_s)
 
         @schema.validate(@xml).map do |error|

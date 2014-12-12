@@ -151,7 +151,7 @@ module OneLogin
       end
 
       def validate_structure(soft = true)
-        @schema = SAML_SCHEMA_PROTOCOL_20
+        @schema = SamlMessage.SAML_SCHEMA_PROTOCOL_20
         @xml = Nokogiri::XML(self.document.to_s)
 
         if soft
