@@ -213,7 +213,7 @@ module OneLogin
           .scan(/.{1,64}/)
           .join("\n")
 
-        "----- BEGIN CERTIFICATE -----\n#{body}\n----- END CERTIFICATE -----"
+        "-----BEGIN CERTIFICATE-----\n#{body}\n-----END CERTIFICATE-----"
       end
 
       def validate_conditions(soft = true)
