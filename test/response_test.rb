@@ -368,5 +368,20 @@ class RubySamlTest < Test::Unit::TestCase
       end
     end
 
+    context "#formatted_certificate" do
+      should "return the certificate when it is valid" do
+        response = OneLogin::RubySaml::Response.new(response_document)
+        assert_equal valid_certificate, response.send(:formatted_certificate, valid_certificate)
+      end
+
+      should "reformat the certificate when it is invalid" do
+        response = OneLogin::RubySaml::Response.new(response_document)
+
+        assert_equal valid_certificate, response.send(:formatted_certificate, invalid_certificate1)
+        assert_equal valid_certificate, response.send(:formatted_certificate, invalid_certificate2)
+        assert_equal valid_certificate, response.send(:formatted_certificate, invalid_certificate3)
+      end
+    end
+
   end
 end
