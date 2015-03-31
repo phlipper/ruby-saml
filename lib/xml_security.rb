@@ -34,16 +34,20 @@ require "onelogin/ruby-saml/validation_error"
 module XMLSecurity
 
   class BaseDocument < REXML::Document
+    C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
+    DSIG = "http://www.w3.org/2000/09/xmldsig#"
 
-    C14N            = "http://www.w3.org/2001/10/xml-exc-c14n#"
-    DSIG            = "http://www.w3.org/2000/09/xmldsig#"
 
     def canon_algorithm(element)
       case element
-        when "http://www.w3.org/2001/10/xml-exc-c14n#"         then Nokogiri::XML::XML_C14N_EXCLUSIVE_1_0
-        when "http://www.w3.org/TR/2001/REC-xml-c14n-20010315" then Nokogiri::XML::XML_C14N_1_0
-        when "http://www.w3.org/2006/12/xml-c14n11"            then Nokogiri::XML::XML_C14N_1_1
-        else                                                        Nokogiri::XML::XML_C14N_EXCLUSIVE_1_0
+      when "http://www.w3.org/2001/10/xml-exc-c14n#"
+        Nokogiri::XML::XML_C14N_EXCLUSIVE_1_0
+      when "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+        Nokogiri::XML::XML_C14N_1_0
+      when "http://www.w3.org/2006/12/xml-c14n11"
+        Nokogiri::XML::XML_C14N_1_1
+      else
+        Nokogiri::XML::XML_C14N_EXCLUSIVE_1_0
       end
     end
 
@@ -60,15 +64,15 @@ module XMLSecurity
   end
 
   class Document < BaseDocument
-    RSA_SHA1            = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
-    RSA_SHA256            = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
-    RSA_SHA384            = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"
-    RSA_SHA512            = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"
-    SHA1            = "http://www.w3.org/2000/09/xmldsig#sha1"
-    SHA256          = "http://www.w3.org/2001/04/xmldsig-more#sha256"
-    SHA384          = "http://www.w3.org/2001/04/xmldsig-more#sha384"
-    SHA512          = "http://www.w3.org/2001/04/xmldsig-more#sha512"
-    ENVELOPED_SIG   = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
+    RSA_SHA1 = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+    RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+    RSA_SHA384 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"
+    RSA_SHA512 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"
+    SHA1 = "http://www.w3.org/2000/09/xmldsig#sha1"
+    SHA256 = "http://www.w3.org/2001/04/xmldsig-more#sha256"
+    SHA384 = "http://www.w3.org/2001/04/xmldsig-more#sha384"
+    SHA512 = "http://www.w3.org/2001/04/xmldsig-more#sha512"
+    ENVELOPED_SIG = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
     INC_PREFIX_LIST = "#default samlp saml ds xs xsi md"
 
     attr_accessor :uuid
