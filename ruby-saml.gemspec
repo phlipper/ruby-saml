@@ -32,6 +32,8 @@ Gem::Specification.new do |s|
   # have liked to constrain Ruby 1.8.7 to install only the 1.5.x versions.
   s.add_runtime_dependency('nokogiri', '>= 1.5.10')
 
+  s.add_development_dependency('guard',    '~> 2.12')
+  s.add_development_dependency('guard-minitest', '~> 2.4')
   s.add_development_dependency('minitest', '~> 5.5')
   s.add_development_dependency('mocha',    '~> 0.14')
   s.add_development_dependency('rake',     '~> 10')
