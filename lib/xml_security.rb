@@ -37,7 +37,6 @@ module XMLSecurity
     C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
     DSIG = "http://www.w3.org/2000/09/xmldsig#"
 
-
     def canon_algorithm(element)
       case element
       when "http://www.w3.org/2001/10/xml-exc-c14n#"
@@ -61,6 +60,15 @@ module XMLSecurity
       end
     end
 
+    private
+
+    def nokogiri_document
+      @nokogiri_document ||= nokogiri_parse(self.to_s)
+    end
+
+    def nokogiri_parse(xml)
+      Nokogiri::XML(xml) { |config| config.noent.nonet }
+    end
   end
 
   class Document < BaseDocument
@@ -75,12 +83,10 @@ module XMLSecurity
     ENVELOPED_SIG = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
     INC_PREFIX_LIST = "#default samlp saml ds xs xsi md"
 
-    attr_accessor :uuid
+    attr_writer :uuid
 
     def uuid
-      @uuid ||= begin
-        document.root.nil? ? nil : document.root.attributes['ID']
-      end
+      @uuid ||= nokogiri_document.root.attributes['ID']
     end
 
     #<Signature>
@@ -99,8 +105,6 @@ module XMLSecurity
       #<Object />
     #</Signature>
     def sign_document(private_key, certificate, signature_method = RSA_SHA1, digest_method = SHA1)
-      noko = Nokogiri.parse(self.to_s)
-
       signature_element = REXML::Element.new("ds:Signature").add_namespace('ds', DSIG)
       signed_info_element = signature_element.add_element("ds:SignedInfo")
       signed_info_element.add_element("ds:CanonicalizationMethod", {"Algorithm" => C14N})
@@ -117,11 +121,11 @@ module XMLSecurity
 
       digest_method_value = reference_element.add_element("ds:DigestMethod", {"Algorithm" => digest_method}).attribute("Algorithm").value
       inclusive_namespaces = INC_PREFIX_LIST.split(" ")
-      canon_doc = noko.canonicalize(canon_algorithm(C14N), inclusive_namespaces)
+      canon_doc = nokogiri_document.canonicalize(canon_algorithm(C14N), inclusive_namespaces)
       reference_element.add_element("ds:DigestValue").text = compute_digest(canon_doc, algorithm(digest_method_value))
 
       # add SignatureValue
-      noko_sig_element = Nokogiri.parse(signature_element.to_s)
+      noko_sig_element = nokogiri_parse(signature_element.to_s)
       noko_signed_info_element = noko_sig_element.at_xpath('//ds:Signature/ds:SignedInfo', 'ds' => DSIG)
       canon_string = noko_signed_info_element.canonicalize(canon_algorithm(C14N))
 
@@ -176,11 +180,8 @@ module XMLSecurity
 
     def validate_document(idp_cert_fingerprint, soft = true, options = {})
       # get cert from response
-      cert_element = REXML::XPath.first(
-        self,
-        "//ds:X509Certificate",
-        { "ds"=>DSIG }
-      )
+      cert_element = nokogiri_document.at("//ds:X509Certificate", "ds" => DSIG)
+
       unless cert_element
         if soft
           return false
@@ -188,6 +189,7 @@ module XMLSecurity
           raise OneLogin::RubySaml::ValidationError.new("Certificate element missing in response (ds:X509Certificate)")
         end
       end
+
       base64_cert = cert_element.text
       cert_text = Base64.decode64(base64_cert)
       cert = OpenSSL::X509::Certificate.new(cert_text)
@@ -290,27 +292,14 @@ module XMLSecurity
     end
 
     def extract_signed_element_id
-      reference_element = REXML::XPath.first(
-        self,
-        "//ds:Signature/ds:SignedInfo/ds:Reference",
-        {"ds"=>DSIG}
-      )
-      self.signed_element_id = reference_element.attribute("URI").value[1..-1] unless reference_element.nil?
-    end
-
-    def extract_inclusive_namespaces
-      element = REXML::XPath.first(
-        self,
-        "//ec:InclusiveNamespaces",
-        { "ec" => C14N }
-      )
-      if element
-        prefix_list = element.attributes.get_attribute("PrefixList").value
-        prefix_list.split(" ")
-      else
-        []
+      if element = nokogiri_document.at("//ds:Reference", "ds" => DSIG)
+        self.signed_element_id = element["URI"].delete("#")
       end
     end
 
+    def extract_inclusive_namespaces
+      element = nokogiri_document.at("//ec:InclusiveNamespaces", "ec" => C14N)
+      element ? element["PrefixList"].split(" ") : []
+    end
   end
 end
