@@ -37,7 +37,7 @@ module XMLSecurity
     C14N = "http://www.w3.org/2001/10/xml-exc-c14n#"
     DSIG = "http://www.w3.org/2000/09/xmldsig#"
 
-    def canon_algorithm(element)
+    def canonical_algorithm(element)
       case element
       when "http://www.w3.org/2001/10/xml-exc-c14n#"
         Nokogiri::XML::XML_C14N_EXCLUSIVE_1_0
@@ -68,10 +68,6 @@ module XMLSecurity
 
     def nokogiri_parse(xml)
       Nokogiri::XML(xml) { |config| config.noent.nonet }
-    end
-
-    def algorithm_value(element)
-      element && element.attribute("Algorithm").value
     end
   end
 
@@ -144,7 +140,7 @@ module XMLSecurity
 
     def signed_info_element(signature_method, digest_method)
       canonical_document = nokogiri_document.canonicalize(
-        canon_algorithm(C14N),
+        canonical_algorithm(C14N),
         INC_PREFIX_LIST.split(" ")
       )
       digest_value = encoded_digest(
@@ -199,7 +195,7 @@ module XMLSecurity
     def signature_value(private_key, signature_method, signature_element)
       signature_element = nokogiri_parse(signature_element.to_s)
       noko_signed_info_element = signature_element.at('//ds:Signature/ds:SignedInfo', 'ds' => DSIG)
-      canonical_element = noko_signed_info_element.canonicalize(canon_algorithm(C14N))
+      canonical_element = noko_signed_info_element.canonicalize(canonical_algorithm(C14N))
 
       signature = private_key.sign(
         algorithm(signature_method).new,
@@ -260,53 +256,75 @@ module XMLSecurity
       document = nokogiri_document.dup
 
       # create a working copy so we don't modify the original
-      working_copy = REXML::Document.new(self.to_s).root
+      working_copy = nokogiri_parse(self.to_s)
 
       # store and remove signature node
-      sig_element = REXML::XPath.first(
-        working_copy,
-        "//ds:Signature",
-        "ds" => DSIG
-      ).remove
+      sig_element = working_copy.at("//ds:Signature", "ds" => DSIG).remove
+      signed_info_element = sig_element.at("./ds:SignedInfo", "ds" => DSIG)
 
       # verify signature
-      signed_info_element = REXML::XPath.first(sig_element, "//ds:SignedInfo", "ds"=>DSIG)
-      noko_sig_element = document.at('//ds:Signature', 'ds' => DSIG)
-      noko_signed_info_element = noko_sig_element.at('./ds:SignedInfo', 'ds' => DSIG)
-      canon_algorithm_value = canon_algorithm(algorithm_value(REXML::XPath.first(sig_element, '//ds:CanonicalizationMethod', 'ds' => DSIG)))
-      canon_string = noko_signed_info_element.canonicalize(canon_algorithm_value)
-      noko_sig_element.remove
+      original_signature_element = document.at("//ds:Signature", "ds" => DSIG)
+      noko_signed_info_element = original_signature_element.at("./ds:SignedInfo", "ds" => DSIG)
+
+      algorithm_namespace = sig_element.at(
+        "./ds:SignedInfo/ds:CanonicalizationMethod",
+        "ds" => DSIG
+      )["Algorithm"]
+
+      canonical_algorithm_value = canonical_algorithm(algorithm_namespace)
+
+      canonical_string = noko_signed_info_element.canonicalize(canonical_algorithm_value)
+      original_signature_element.remove
 
       # check digests
-      REXML::XPath.each(sig_element, "//ds:Reference", {"ds"=>DSIG}) do |ref|
-        uri = ref.attributes.get_attribute("URI").value
+      uri = sig_element.at(".//ds:SignedInfo/ds:Reference", "ds" => DSIG)["URI"]
+      hashed_element = document.at("//*[@ID='#{uri[1..-1]}']")
+      canonical_hashed_element = hashed_element.canonicalize(
+        canonical_algorithm_value,
+        inclusive_namespaces
+      )
 
-        hashed_element = document.at("//*[@ID='#{uri[1..-1]}']")
-        canon_algorithm_value = canon_algorithm algorithm_value(REXML::XPath.first(ref, '//ds:CanonicalizationMethod', 'ds' => DSIG))
-        canon_hashed_element = hashed_element.canonicalize(canon_algorithm_value, inclusive_namespaces)
+      digest_algorithm_method = sig_element.at(
+        "./ds:SignedInfo/ds:Reference/ds:DigestMethod",
+        "ds" => DSIG
+      )["Algorithm"]
+      digest_algorithm = algorithm(digest_algorithm_method)
+      computed_digest = digest_algorithm.digest(canonical_hashed_element)
 
-        digest_algorithm = algorithm(algorithm_value(REXML::XPath.first(ref, "//ds:DigestMethod", 'ds' => DSIG)))
+      digest_value_text = sig_element.at(
+        "./ds:SignedInfo/ds:Reference/ds:DigestValue",
+        "ds" => DSIG
+      ).text
+      digest_value = Base64.decode64(digest_value_text)
 
-        hash = digest_algorithm.digest(canon_hashed_element)
-        digest_value = Base64.decode64(REXML::XPath.first(ref, "//ds:DigestValue", "ds" => DSIG).text)
+      unless digests_match?(computed_digest, digest_value)
+        @errors << "Digest mismatch"
 
-        unless digests_match?(hash, digest_value)
-          @errors << "Digest mismatch"
-          return soft ? false : (raise OneLogin::RubySaml::ValidationError.new("Digest mismatch"))
+        if soft
+          return false
+        else
+          raise OneLogin::RubySaml::ValidationError.new("Digest mismatch")
         end
       end
 
-      base64_signature = REXML::XPath.first(sig_element, "//ds:SignatureValue", "ds" => DSIG).text
-      signature = Base64.decode64(base64_signature)
+      signature_value_text = sig_element.at(
+        "./ds:SignatureValue",
+        "ds" => DSIG
+      ).text
+      signature = Base64.decode64(signature_value_text)
 
       # get certificate object
       cert_text = Base64.decode64(base64_cert)
       cert = OpenSSL::X509::Certificate.new(cert_text)
 
       # signature method
-      signature_algorithm = algorithm(algorithm_value(REXML::XPath.first(signed_info_element, "//ds:SignatureMethod", "ds" => DSIG)))
+      signature_method_text = sig_element.at(
+        "./ds:SignedInfo/ds:SignatureMethod",
+        "ds" => DSIG
+      )["Algorithm"]
+      signature_algorithm = algorithm(signature_method_text)
 
-      unless cert.public_key.verify(signature_algorithm.new, signature, canon_string)
+      unless cert.public_key.verify(signature_algorithm.new, signature, canonical_string)
         @errors << "Key validation error"
         return soft ? false : (raise OneLogin::RubySaml::ValidationError.new("Key validation error"))
       end
