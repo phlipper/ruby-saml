@@ -69,6 +69,10 @@ module XMLSecurity
     def nokogiri_parse(xml)
       Nokogiri::XML(xml) { |config| config.noent.nonet }
     end
+
+    def algorithm_value(element)
+      element && element.attribute("Algorithm").value
+    end
   end
 
   class Document < BaseDocument
@@ -203,7 +207,6 @@ module XMLSecurity
       )
       Base64.encode64(signature).delete("\n")
     end
-
   end
 
   class SignedDocument < BaseDocument
@@ -268,9 +271,9 @@ module XMLSecurity
 
       # verify signature
       signed_info_element = REXML::XPath.first(sig_element, "//ds:SignedInfo", "ds"=>DSIG)
-      noko_sig_element = document.at_xpath('//ds:Signature', 'ds' => DSIG)
-      noko_signed_info_element = noko_sig_element.at_xpath('./ds:SignedInfo', 'ds' => DSIG)
-      canon_algorithm_value = canon_algorithm(REXML::XPath.first(sig_element, '//ds:CanonicalizationMethod', 'ds' => DSIG).attribute('Algorithm').value)
+      noko_sig_element = document.at('//ds:Signature', 'ds' => DSIG)
+      noko_signed_info_element = noko_sig_element.at('./ds:SignedInfo', 'ds' => DSIG)
+      canon_algorithm_value = canon_algorithm(algorithm_value(REXML::XPath.first(sig_element, '//ds:CanonicalizationMethod', 'ds' => DSIG)))
       canon_string = noko_signed_info_element.canonicalize(canon_algorithm_value)
       noko_sig_element.remove
 
@@ -278,11 +281,11 @@ module XMLSecurity
       REXML::XPath.each(sig_element, "//ds:Reference", {"ds"=>DSIG}) do |ref|
         uri = ref.attributes.get_attribute("URI").value
 
-        hashed_element = document.at_xpath("//*[@ID='#{uri[1..-1]}']")
-        canon_algorithm_value = canon_algorithm REXML::XPath.first(ref, '//ds:CanonicalizationMethod', 'ds' => DSIG).attribute('Algorithm').value
+        hashed_element = document.at("//*[@ID='#{uri[1..-1]}']")
+        canon_algorithm_value = canon_algorithm algorithm_value(REXML::XPath.first(ref, '//ds:CanonicalizationMethod', 'ds' => DSIG))
         canon_hashed_element = hashed_element.canonicalize(canon_algorithm_value, inclusive_namespaces)
 
-        digest_algorithm = algorithm(REXML::XPath.first(ref, "//ds:DigestMethod", 'ds' => DSIG).attribute("Algorithm").value)
+        digest_algorithm = algorithm(algorithm_value(REXML::XPath.first(ref, "//ds:DigestMethod", 'ds' => DSIG)))
 
         hash = digest_algorithm.digest(canon_hashed_element)
         digest_value = Base64.decode64(REXML::XPath.first(ref, "//ds:DigestValue", "ds" => DSIG).text)
@@ -301,7 +304,7 @@ module XMLSecurity
       cert = OpenSSL::X509::Certificate.new(cert_text)
 
       # signature method
-      signature_algorithm = algorithm(REXML::XPath.first(signed_info_element, "//ds:SignatureMethod", "ds" => DSIG).attribute("Algorithm").value)
+      signature_algorithm = algorithm(algorithm_value(REXML::XPath.first(signed_info_element, "//ds:SignatureMethod", "ds" => DSIG)))
 
       unless cert.public_key.verify(signature_algorithm.new, signature, canon_string)
         @errors << "Key validation error"
